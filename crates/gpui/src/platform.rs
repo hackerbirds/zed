@@ -1,6 +1,7 @@
 mod app_menu;
 mod keyboard;
 mod keystroke;
+mod status_bar_button;
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 mod linux;
@@ -71,6 +72,7 @@ use uuid::Uuid;
 pub use app_menu::*;
 pub use keyboard::*;
 pub use keystroke::*;
+pub use status_bar_button::*;
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub(crate) use linux::*;
@@ -238,6 +240,8 @@ pub(crate) trait Platform: 'static {
     fn get_menus(&self) -> Option<Vec<OwnedMenu>> {
         None
     }
+
+    fn set_status_bar_menu(&self, button: StatusBarButton, menu: Menu, keymap: &Keymap);
 
     fn set_dock_menu(&self, menu: Vec<MenuItem>, keymap: &Keymap);
     fn perform_dock_menu_action(&self, _action: usize) {}

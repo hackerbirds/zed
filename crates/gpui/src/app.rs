@@ -40,8 +40,9 @@ use crate::{
     Keymap, Keystroke, LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform,
     PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, Point, PromptBuilder,
     PromptButton, PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle,
-    Reservation, ScreenCaptureSource, SharedString, SubscriberSet, Subscription, SvgRenderer, Task,
-    TextSystem, Window, WindowAppearance, WindowHandle, WindowId, WindowInvalidator,
+    Reservation, ScreenCaptureSource, SharedString, StatusBarButton, SubscriberSet, Subscription,
+    SvgRenderer, Task, TextSystem, Window, WindowAppearance, WindowHandle, WindowId,
+    WindowInvalidator,
     colors::{Colors, GlobalColors},
     current_platform, hash, init_app_menus,
 };
@@ -149,6 +150,18 @@ impl Application {
             Arc::new(()),
             Arc::new(NullHttpClient),
         ))
+    }
+
+    /// Set status bar
+    pub fn with_status_bar(self, button: StatusBarButton, menu: Menu) -> Self {
+        let mut context_lock = self.0.borrow_mut();
+        context_lock.platform.set_status_bar_menu(
+            button,
+            menu,
+            &context_lock.keymap.as_ref().borrow(),
+        );
+        drop(context_lock);
+        self
     }
 
     /// Assign
@@ -1886,6 +1899,12 @@ impl App {
     /// Sets the right click menu for the app icon in the dock
     pub fn set_dock_menu(&self, menus: Vec<MenuItem>) {
         self.platform.set_dock_menu(menus, &self.keymap.borrow())
+    }
+
+    /// Sets the status bar menu (top right menu on macOS)
+    pub fn set_status_bar_menu(&self, button: StatusBarButton, menu: Menu) {
+        self.platform
+            .set_status_bar_menu(button, menu, &self.keymap.borrow())
     }
 
     /// Performs the action associated with the given dock menu item, only used on Windows for now.

@@ -9,8 +9,8 @@ use crate::{
     CursorStyle, ForegroundExecutor, Image, ImageFormat, KeyContext, Keymap, MacDispatcher,
     MacDisplay, MacWindow, Menu, MenuItem, OsMenu, OwnedMenu, PathPromptOptions, Platform,
     PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
-    PlatformWindow, Result, SemanticVersion, SystemMenuType, Task, WindowAppearance, WindowParams,
-    hash,
+    PlatformWindow, Result, SemanticVersion, StatusBarButton, SystemMenuType, Task,
+    WindowAppearance, WindowParams, hash,
 };
 use anyhow::{Context as _, anyhow};
 use block::ConcreteBlock;
@@ -19,7 +19,8 @@ use cocoa::{
         NSApplication, NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular,
         NSEventModifierFlags, NSMenu, NSMenuItem, NSModalResponse, NSOpenPanel, NSPasteboard,
         NSPasteboardTypePNG, NSPasteboardTypeRTF, NSPasteboardTypeRTFD, NSPasteboardTypeString,
-        NSPasteboardTypeTIFF, NSSavePanel, NSVisualEffectState, NSVisualEffectView, NSWindow,
+        NSPasteboardTypeTIFF, NSSavePanel, NSStatusBar, NSStatusItem, NSVariableStatusItemLength,
+        NSVisualEffectState, NSVisualEffectView, NSWindow,
     },
     base::{BOOL, NO, YES, id, nil, selector},
     foundation::{
@@ -230,7 +231,7 @@ impl MacPlatform {
             } else {
                 Some(slice::from_raw_parts(
                     data.bytes() as *mut u8,
-                    data.length() as usize,
+                    NSData::length(data) as usize,
                 ))
             }
         }
@@ -274,6 +275,44 @@ impl MacPlatform {
             }
 
             application_menu
+        }
+    }
+
+    unsafe fn create_status_bar_menu(
+        &self,
+        button: StatusBarButton,
+        menu: Menu,
+        delegate: id,
+        actions: &mut Vec<Box<dyn Action>>,
+        keymap: &Keymap,
+    ) -> id {
+        unsafe {
+            let status_item = match button {
+                StatusBarButton::Name(shared_string) => {
+                    let item = NSStatusBar::systemStatusBar(nil)
+                        .statusItemWithLength_(NSVariableStatusItemLength);
+                    item.setTitle_(ns_string(&shared_string));
+
+                    item
+                }
+            };
+
+            let status_bar_menu = NSMenu::new(nil).autorelease();
+            status_bar_menu.setTitle_(ns_string(&menu.name));
+            status_bar_menu.setDelegate_(delegate);
+
+            for item_config in &menu.items {
+                status_bar_menu.addItem_(Self::create_menu_item(
+                    item_config,
+                    delegate,
+                    actions,
+                    keymap,
+                ));
+            }
+
+            status_item.setMenu_(status_bar_menu);
+
+            status_item
         }
     }
 
@@ -931,6 +970,16 @@ impl Platform for MacPlatform {
         self.0.lock().menus = Some(menus.into_iter().map(|menu| menu.owned()).collect());
     }
 
+    fn set_status_bar_menu(&self, button: StatusBarButton, menu: Menu, keymap: &Keymap) {
+        unsafe {
+            let app: id = msg_send![APP_CLASS, sharedApplication];
+            let mut state = self.0.lock();
+            let actions = &mut state.menu_actions;
+            self.create_status_bar_menu(button, menu, NSWindow::delegate(app), actions, keymap);
+            drop(state);
+        }
+    }
+
     fn get_menus(&self) -> Option<Vec<OwnedMenu>> {
         self.0.lock().menus.clone()
     }
@@ -1089,7 +1138,7 @@ impl Platform for MacPlatform {
                     }
 
                     let rtf_data = attributed_string.RTFFromRange_documentAttributes_(
-                        NSRange::new(0, attributed_string.length()),
+                        NSRange::new(0, NSData::length(attributed_string)),
                         nil,
                     );
                     if rtf_data != nil {
@@ -1125,8 +1174,10 @@ impl Platform for MacPlatform {
                     // "If the length of the NSData object is 0, this property returns nil."
                     return Some(self.read_string_from_clipboard(&state, &[]));
                 } else {
-                    let bytes =
-                        slice::from_raw_parts(data.bytes() as *mut u8, data.length() as usize);
+                    let bytes = slice::from_raw_parts(
+                        data.bytes() as *mut u8,
+                        NSData::length(data) as usize,
+                    );
 
                     return Some(self.read_string_from_clipboard(&state, bytes));
                 }
@@ -1150,7 +1201,7 @@ impl Platform for MacPlatform {
                 if url_data != nil && !url_data.bytes().is_null() {
                     let bytes = slice::from_raw_parts(
                         url_data.bytes() as *mut u8,
-                        url_data.length() as usize,
+                        NSData::length(url_data) as usize,
                     );
 
                     return Some(self.read_string_from_clipboard(&state, bytes));
@@ -1371,7 +1422,7 @@ fn try_clipboard_image(pasteboard: id, format: ImageFormat) -> Option<ClipboardI
             } else {
                 let bytes = Vec::from(slice::from_raw_parts(
                     data.bytes() as *mut u8,
-                    data.length() as usize,
+                    NSData::length(data) as usize,
                 ));
                 let id = hash(&bytes);
 
@@ -1400,7 +1451,7 @@ unsafe fn get_mac_platform(object: &mut Object) -> &MacPlatform {
     }
 }
 
-extern "C" fn will_finish_launching(_this: &mut Object, _: Sel, _: id) {
+extern "C" fn will_finish_launching(_this: &mut Object, _: Sel, _app: id) {
     unsafe {
         let user_defaults: id = msg_send![class!(NSUserDefaults), standardUserDefaults];
 

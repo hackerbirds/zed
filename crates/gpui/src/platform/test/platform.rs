@@ -1,9 +1,10 @@
 use crate::{
     AnyWindowHandle, BackgroundExecutor, ClipboardItem, CursorStyle, DevicePixels,
-    DummyKeyboardMapper, ForegroundExecutor, Keymap, NoopTextSystem, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem, PromptButton,
-    ScreenCaptureFrame, ScreenCaptureSource, ScreenCaptureStream, SourceMetadata, Task,
-    TestDisplay, TestWindow, WindowAppearance, WindowParams, size,
+    DummyKeyboardMapper, ForegroundExecutor, Keymap, Menu, NoopTextSystem, Platform,
+    PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
+    PromptButton, ScreenCaptureFrame, ScreenCaptureSource, ScreenCaptureStream, SourceMetadata,
+    Task, TestDisplay, TestWindow, WindowAppearance, WindowParams,
+    platform::status_bar_button::StatusBarButton, size,
 };
 use anyhow::Result;
 use collections::VecDeque;
@@ -433,6 +434,10 @@ impl Platform for TestPlatform {
     }
 
     fn open_with_system(&self, _path: &Path) {
+        unimplemented!()
+    }
+
+    fn set_status_bar_menu(&self, _button: StatusBarButton, _menu: Menu, _keymap: &Keymap) {
         unimplemented!()
     }
 }
